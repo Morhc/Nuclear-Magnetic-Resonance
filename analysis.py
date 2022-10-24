@@ -20,6 +20,18 @@ def load(*files):
 
         df = pd.read_csv(file, skiprows=15, header=0)
 
+        information = pd.read_csv(file, nrows=14, header=None, names=['Feature', 'Value', 'x', 'xx'], delimiter=',')
+
+        volts_offset = float(information.Value[information.Feature == 'Vertical Offset'])
+        volts_scale = float(information.Value[information.Feature == 'Vertical Scale'])
+        time_scale = float(information.Value[information.Feature == 'Horizontal Scale'])
+
+        df['TIME'] = df['TIME'] / time_scale
+
+        df['CH1'] = df['CH1'] / volts_scale + volts_offset
+
+        df['CH1 Peak Detect'] = df['CH1 Peak Detect'] / volts_scale + volts_offset
+
         loaded_results[suffix] = df
 
     return loaded_results
@@ -67,7 +79,7 @@ def B1(data, savename):
         axes[i].set_xlabel('Time (s)')
         axes[i].set_ylabel('Smoothed Voltage (V)')
 
-        axes[i].set_ylim(-4, -0.5)
+        axes[i].set_ylim(-8.5, -0.5)
 
 
     plt.tight_layout()
@@ -219,7 +231,7 @@ def B6(data, savename):
         axes[i].set_xlabel('Time (s)')
         axes[i].set_ylabel('Smoothed Voltage (V)')
 
-        axes[i].set_ylim(-3.5, -1)
+        axes[i].set_ylim(-10, -5)
 
 
     plt.tight_layout()
