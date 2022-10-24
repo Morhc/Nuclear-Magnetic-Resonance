@@ -367,7 +367,7 @@ def B5(data, savename):
         peak_val.append(-voltage[two+push])
 
 
-
+        """
         plt.scatter([time[one], time[two+push]], [voltage[one], voltage[two+push]], marker='x', color='red', zorder=2)
         plt.scatter(time[mid], voltage[mid], marker='x', color='yellow', zorder=3)
 
@@ -383,7 +383,7 @@ def B5(data, savename):
         savepath = os.path.join('results', 'plots', savename+'_'+file+'.png')
         plt.savefig(savepath)
         plt.close('all')
-
+        """
 
     t1, t2, t3, peak_val = 2*np.asarray(tau1), 2*np.asarray(tau2), 2*np.asarray(tau3), np.asarray(peak_val) / np.max(peak_val)
 
@@ -417,7 +417,7 @@ def B5(data, savename):
         xtest = np.linspace(2.5,8,100)
         axes[i].plot(xtest, decay(xtest, *popt1), color='blue', zorder=1, label=r'$T_1$ = ' + f'{round(popt1[1], 2)}' + r'$\pm$' + f'{round(np.diag(np.sqrt(pcov1))[1], 2)}')
         axes[i].plot(xtest, decay(xtest, *popt2), color='orange', zorder=1, label=r'$T_1$ = ' + f'{round(popt2[1], 2)}' + r'$\pm$' + f'{round(np.diag(np.sqrt(pcov2))[1], 2)}')
-        axes[i].plot(xtest, decay(xtest, *popt3), color='green', zorder=1, label=r'$T_1$ =' + f'{round(popt3[1], 2)}' + r'$\pm$' + f'{round(np.diag(np.sqrt(pcov3))[1], 2)}')
+        axes[i].plot(xtest, decay(xtest, *popt3), color='green', zorder=1, label=r'$T_1$ = ' + f'{round(popt3[1], 2)}' + r'$\pm$' + f'{round(np.diag(np.sqrt(pcov3))[1], 2)}')
 
         axes[i].legend()
 
