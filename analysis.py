@@ -44,6 +44,7 @@ def smooth(y, box_pts):
 
 #finds the closest x value index
 def closest(x, data): return np.argmin(np.abs(np.asarray(data)-x))
+
 #finds the peak value index
 def peak(data): return np.argmax(np.asarray(data))
 
@@ -52,8 +53,11 @@ def peak(data): return np.argmax(np.asarray(data))
 
 """ CURVE FITTING """
 
-#exponential decay
-def decay(t, M0, T2star): return M0*np.exp(-t/T2star)
+#B4
+def irs(tau, T1): return 1 - 2*np.exp(-tau/T1)
+
+#B5
+def decay(t, M, T2): return M*np.exp(-t/T2)
 
 #straight line
 def line(x, m, b): return m*x + b
@@ -66,7 +70,7 @@ def B1(data, savename):
 
     specs = [d for d in data.values()]
 
-    fig, axes = plt.subplots(3,1,figsize=(5,8))
+    fig, axes = plt.subplots(1,3,figsize=(8,4))
 
     fig.suptitle('Voltage over Time')
 
@@ -181,16 +185,16 @@ def B3(data, T2stars, savename):
         if nnn == 0: axes[nnn].set_title(r'X-Y Plane Verifying $T_2$$^*$')
         if nnn == 1: axes[nnn].set_title(r'Z Plane Determining $T_1$')
         axes[nnn].set_xlabel('Time (s)')
-        axes[nnn].set_ylabel('Peak Voltage (V)')
+        axes[nnn].set_ylabel('Smoothed Voltage (V)')
 
         time = spec['TIME'].to_numpy()
-        voltage = smooth(spec['CH1 Peak Detect'].to_numpy(), 30)
+        voltage = smooth(spec['CH1 Peak Detect'].to_numpy(), 10)
 
 
-        cut = closest(np.max(voltage), voltage) if nnn == 0 else 6
+        cut = closest(np.max(voltage), voltage) if nnn == 0 else 0
 
         if nnn == 0 and savename.find('rubber') == -1: cut+=50
-        elif nnn == 1 and savename.find('ethanol') == -1: cut+=20
+        elif nnn == 1 and savename.find('ethanol') == -1: cut+=0
 
         time, voltage = time[j+cut:-30], voltage[j+cut:-30]
 
@@ -208,7 +212,7 @@ def B3(data, T2stars, savename):
             first, second = peak(voltage[:500]), peak(voltage)
 
             tau = time[second] - time[first]
-            T1 = tau/np.log(2)
+            T1 = tau/np.log(voltage[second]/voltage[first])
 
             plt.scatter([time[first], time[second]], [voltage[first], voltage[second]], marker='x', color='r', zorder=3, label=r'$\tau$ = ' + f'{round(tau, 2)}s')
             plt.scatter(7, voltage[first], color='white', zorder=1, label='$T_1$ = ' + f'{round(T1,2)}s')
@@ -229,42 +233,115 @@ def B4(data, savename):
 
     for file, spec in zip(data.keys(), data.values()):
 
-        time, voltage = spec['TIME'].to_numpy(), smooth(spec['CH1 Peak Detect'].to_numpy(), 30)
-
+        time, voltage = spec['TIME'].to_numpy(), smooth(spec['CH1 Peak Detect'].to_numpy(), 1)
         j, k = closest(0.1, time), closest(8.5, time)
-
         time, voltage = time[j:k], voltage[j:k]
 
-        pt = peak(np.abs(voltage)) if np.max(voltage) - np.median(voltage) < 0.5 else peak(voltage)
+        adjust = np.median(voltage[300:400]) if file == '19' else np.median(voltage[-100:])
+
+        voltage -= adjust
 
 
+        if file in ['14', '15']:
+            pt = peak(np.abs(voltage[voltage > -3]))
+
+        elif file in ['20', '22']:
+            pt1 = peak(-voltage)
+            pt = pt1+peak(-voltage[pt1+20:]) + 20
+
+            if file == '20': pt += 8
+
+        elif file == '25':
+            pt = peak(voltage[voltage<4])
+
+        elif file in ['27', '28']:
+            pt = peak(-voltage)
+
+            if file == '28': pt += 4
+
+        else: pt = peak(np.abs(voltage)) if np.max(voltage) - np.median(voltage) < 0.5 else peak(voltage)
+
+
+        if file in ['17', '29', '30', '33', '34']: pass
+        elif file not in ['16', '23']:
+            taus.append(time[pt])
+            volts.append(voltage[pt])
+        else:
+            taus.append(time[pt])
+            volts.append(0)
+
+
+        """
         plt.plot(time, voltage, color='black', zorder=1)
         plt.scatter(time[pt], voltage[pt], marker='x', color='red', zorder=2)
 
-        taus.append(time[pt])
-        volts.append(voltage[pt])
-
-
         plt.title('Voltage vs Time')
         plt.xlabel('Time (s)')
-        plt.ylabel('Peak Voltage (V)')
+        plt.ylabel('Smoothed Voltage (V)')
 
         plt.tight_layout()
 
         savepath = os.path.join('results', 'plots', savename+'_'+file+'.png')
         plt.savefig(savepath)
         plt.close('all')
+        """
 
-    if savename.find('water') != -1:
-        volts[2] = 0
+    fig, axes = plt.subplots(1,2, figsize=(8,4))
 
-    plt.scatter(taus, volts)
+    fig.suptitle(r'Determining $T_1$ for ' + savename.split('_')[1][0].upper() + savename.split('_')[1][1:])
+
+    axes[0].set_title('Zero-Crossing Method')
+    axes[0].set_ylabel('Normalized Peaks')
+    axes[0].set_xlabel(r'$\tau$ (s)')
+
+    taus, volts = np.asarray(taus), (np.asarray(volts)/np.max(volts))
+
+
+    popt, pcov = curve_fit(f=irs, xdata=taus, ydata=volts, p0=[0.5])
+    testx = np.linspace(0,8,300)
+    testirs = irs(testx, *popt)
+
+    axes[0].axhline(0, color='grey', linestyle='--', zorder=1)
+
+    if np.sum(volts == 0) == 1: axes[0].axvline(taus[volts == 0], color='green', linestyle='--', zorder=2, label=r'$T_1$ = ' + f'{round((taus[volts == 0][0])/np.log(2),2)}s [Peak]')
+    axes[0].axvline(testx[closest(0, testirs)], color='red', linestyle='--', zorder=2, label=r'$T_1$ = ' + f'{round(testx[closest(0, testirs)]/np.log(2),2)}s [Curve]')
+
+    axes[0].plot(testx, testirs, color='black', zorder=3)
+    axes[0].scatter(taus, volts, edgecolor='black', facecolor='white', zorder=4, label='Initial Mag. Peak')
+
+    axes[0].legend()
+
+
+    axes[1].set_title('Slope Method')
+    axes[1].set_ylabel('Normalized Peaks')
+    axes[1].set_xlabel(r'$\tau$ (s)')
+
+    taus, volts = np.asarray(taus), (np.asarray(volts)/np.max(volts))
+
+
+    popt, pcov = curve_fit(f=line, xdata=np.log(taus), ydata=volts, p0=[0.05, - np.log(2)])
+    testx = np.linspace(0,4,300)
+    testline = line(testx, *popt)
+
+    axes[1].axhline(0, color='grey', linestyle='--', zorder=1)
+
+    axes[1].plot(testx, testline, color='black', zorder=3, label=r'$T_1$ = ' + f'{round((testx[closest(1, testline)])/np.log(2), 2)}s')
+    axes[1].scatter(np.log(taus), volts, edgecolor='black', facecolor='white', zorder=4, label='Initial Mag. Peak')
+
+
+    axes[1].legend()
+
+
+
+    plt.tight_layout()
 
     savepath = os.path.join('results', 'plots', savename+'.png')
     plt.savefig(savepath)
     plt.close('all')
 
 def B5(data, savename):
+
+    tau1, tau2, tau3, peak_val = [], [], [], []
 
     for file, spec in zip(data.keys(), data.values()):
 
@@ -274,13 +351,32 @@ def B5(data, savename):
         j, k = closest(-0.1, time), closest(8.5, time)
 
         time, voltage = time[j:k], voltage[j:k]
+        voltage -= np.median(voltage[-100:])
+
+        push = 1000 if savename.find('rubber') == -1 else 2000
+
+        one, two = peak(voltage[:500]), peak(voltage[push:])
+        mid = int((two+push+one)/2)
+
+        way1, way2, way3 = time[mid] - time[one], time[two+push] - time[mid], (time[two+push] + time[one])/2
+
+        tau1.append(way1)
+        tau2.append(way2)
+        tau3.append(way3)
+
+        peak_val.append(-voltage[two+push])
 
 
-        plt.plot(time, voltage, color='black')
+
+        plt.scatter([time[one], time[two+push]], [voltage[one], voltage[two+push]], marker='x', color='red', zorder=2)
+        plt.scatter(time[mid], voltage[mid], marker='x', color='yellow', zorder=3)
+
+
+        plt.plot(time, voltage, color='black',zorder=1)
 
         plt.title('Voltage vs Time')
         plt.xlabel('Time (s)')
-        plt.ylabel('Peak Voltage (V)')
+        plt.ylabel('Smoothed Voltage (V)')
 
         plt.tight_layout()
 
@@ -288,13 +384,56 @@ def B5(data, savename):
         plt.savefig(savepath)
         plt.close('all')
 
+
+    t1, t2, t3, peak_val = 2*np.asarray(tau1), 2*np.asarray(tau2), 2*np.asarray(tau3), np.asarray(peak_val) / np.max(peak_val)
+
+
+    fig, axes = plt.subplots(1,2, figsize=(8,4), sharex=True)
+    plt.subplots_adjust(wspace=0)
+
+    fig.suptitle(r'Determining $T_2$ for '+ savename.split('_')[1][0].upper() + savename.split('_')[1][1:])
+
+    axes[0].set_title('Unadjusted Results')
+    axes[1].set_title('Adjusted Results')
+
+    axes[0].set_ylabel('Hanh Echo Peaks')
+    for i in range(2):
+        axes[i].set_xlabel(r'$t = 2 \tau$ (s)')
+
+        if savename.find('rubber') != -1: filter = [True, True, True, True, True] if i == 0 else [False, True, True, True, True]
+        elif savename.find('water') != -1: filter = [True, True, True, True, True] if i == 0 else [True, False, True, True, True]
+        else: filter = [True, True, True, True, True] if i == 0 else [True, False, True, True, False]
+        t1, t2, t3, peak_val = t1[filter], t2[filter], t3[filter], peak_val[filter]
+
+        popt1, pcov1 = curve_fit(f=decay, xdata=t1, ydata=peak_val, p0=[2,10])
+        popt2, pcov2 = curve_fit(f=decay, xdata=t2, ydata=peak_val, p0=[2,10])
+        popt3, pcov3 = curve_fit(f=decay, xdata=t3, ydata=peak_val, p0=[2,10])
+
+        axes[i].scatter(t1, peak_val, color='blue', edgecolor='black', zorder = 2)
+        axes[i].scatter(t2, peak_val, color='orange', edgecolor='black', zorder = 2)
+        axes[i].scatter(t3, peak_val, color='green', edgecolor='black', zorder = 2)
+
+
+        xtest = np.linspace(2.5,8,100)
+        axes[i].plot(xtest, decay(xtest, *popt1), color='blue', zorder=1, label=r'$T_1$ = ' + f'{round(popt1[1], 2)}' + r'$\pm$' + f'{round(np.diag(np.sqrt(pcov1))[1], 2)}')
+        axes[i].plot(xtest, decay(xtest, *popt2), color='orange', zorder=1, label=r'$T_1$ = ' + f'{round(popt2[1], 2)}' + r'$\pm$' + f'{round(np.diag(np.sqrt(pcov2))[1], 2)}')
+        axes[i].plot(xtest, decay(xtest, *popt3), color='green', zorder=1, label=r'$T_1$ =' + f'{round(popt3[1], 2)}' + r'$\pm$' + f'{round(np.diag(np.sqrt(pcov3))[1], 2)}')
+
+        axes[i].legend()
+
+    plt.tight_layout()
+
+    savepath = os.path.join('results', 'plots', savename+'.png')
+    plt.savefig(savepath)
+    plt.close('all')
+
 def B6(data, savename):
 
     specs = [d for d in data.values()]
 
-    fig, axes = plt.subplots(3,1,figsize=(5,8))
+    fig, axes = plt.subplots(1,3,figsize=(8,4))
 
-    fig.suptitle('Voltage vs Time')
+    fig.suptitle('Voltage over Time')
 
     axes[0].set_title('Liquid Water')
     axes[1].set_title('Partially Frozen Water')
