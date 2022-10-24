@@ -59,10 +59,15 @@ def B1(data, savename):
     fig.suptitle('Voltage vs Time')
 
     for i in range(0,3):
-        axes[i].plot(specs[i]['TIME'].to_numpy(), smooth(specs[i]['CH1 Peak Detect'].to_numpy(), 30), color='black')
+
+        j = closest(0, specs[i]['TIME'].to_numpy())
+
+        axes[i].plot(specs[i]['TIME'].to_numpy()[j+50:-50], smooth(specs[i]['CH1 Peak Detect'].to_numpy(), 30)[j+50:-50], color='black')
         axes[i].set_title(f'{90*(i+1)}' + r'$^o$ ' + 'Pulse Width')
         axes[i].set_xlabel('Time (s)')
         axes[i].set_ylabel('Smoothed Voltage (V)')
+
+        axes[i].set_ylim(-4, -0.5)
 
 
     plt.tight_layout()
@@ -196,23 +201,32 @@ def B5(data, savename):
 
 def B6(data, savename):
 
-    for file, spec in zip(data.keys(), data.values()):
+    specs = [d for d in data.values()]
+
+    fig, axes = plt.subplots(3,1,figsize=(5,8))
+
+    fig.suptitle('Voltage vs Time')
+
+    axes[0].set_title('Liquid Water')
+    axes[1].set_title('Partially Frozen Water')
+    axes[2].set_title('Fully Frozen Water')
+
+    for i in range(0,3):
+
+        j = closest(0, specs[i]['TIME'].to_numpy())
+
+        axes[i].plot(specs[i]['TIME'].to_numpy()[j+50:-50], smooth(specs[i]['CH1 Peak Detect'].to_numpy(), 30)[j+50:-50], color='black')
+        axes[i].set_xlabel('Time (s)')
+        axes[i].set_ylabel('Smoothed Voltage (V)')
+
+        axes[i].set_ylim(-3.5, -1)
 
 
+    plt.tight_layout()
 
-
-
-        plt.plot(spec['TIME'].to_numpy(), smooth(spec['CH1 Peak Detect'].to_numpy(), 30), color='black')
-
-        plt.title('Voltage vs Time')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Peak Voltage (V)')
-
-        plt.tight_layout()
-
-        savepath = os.path.join('results', 'plots', savename+'_'+file+'.png')
-        plt.savefig(savepath)
-        plt.close('all')
+    savepath = os.path.join('results', 'plots', 'B6_Plot.png')
+    plt.savefig(savepath)
+    plt.close('all')
 
 """ EXPERIMENTS """
 
@@ -236,7 +250,7 @@ def main():
     B5(load('41', '42', '43', '44', '45'), 'b5_rubber')
     B5(load('46', '47', '48', '49', '50'), 'b5_ethanol')
 
-    B6(load('51', '52', '53'), 'b6_water')
+    B6(load('51', '53', '52'), 'b6_water')
 
 if __name__ == '__main__':
     main()
